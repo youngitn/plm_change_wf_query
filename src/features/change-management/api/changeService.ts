@@ -92,35 +92,58 @@ export const changeService = {
    * 匯出簽核清單 Excel
    */
   exportChangeSignoffs: async (params: IChangeSearchParams): Promise<void> => {
-    // 過濾掉空字串或 undefined 的參數
-    const apiParams: any = {
-      startDate: params.startDate,
-      endDate: params.endDate,
-      businessUnit: params.businessUnit?.split('__')[0],
-      formType: params.formType?.split('__')[0],
-      description: params.keyword,
-      changeNumber: params.changeNumber,
-    };
+    try {
+      // 過濾掉空字串或 undefined 的參數
+      const apiParams: any = {
+        startDate: params.startDate,
+        endDate: params.endDate,
+        businessUnit: params.businessUnit?.split('__')[0],
+        formType: params.formType?.split('__')[0],
+        description: params.keyword,
+        changeNumber: params.changeNumber,
+      };
 
-    Object.keys(apiParams).forEach(key => {
-      if (apiParams[key] === undefined || apiParams[key] === '') {
-        delete apiParams[key];
+      Object.keys(apiParams).forEach(key => {
+        if (apiParams[key] === undefined || apiParams[key] === '') {
+          delete apiParams[key];
+        }
+      });
+
+      const response = await httpClient.get(`${BASE_URL}/changes/export`, {
+        params: apiParams,
+        responseType: 'blob',
+      });
+
+      // 檢查是否回傳的是 JSON (代表錯誤) 而非檔案
+      if (response.data.type === 'application/json') {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const message = JSON.parse(reader.result as string)?.message || '匯出失敗';
+          throw new Error(message);
+        };
+        reader.readAsText(response.data);
+        return;
       }
-    });
 
-    const response = await httpClient.get(`${BASE_URL}/changes/export`, {
-      params: apiParams,
-      responseType: 'blob',
-    });
-
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement('a');
-    link.href = url;
-    const filename = `PLM_Change_Export_${new Date().toISOString().split('T')[0]}.xlsx`;
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+      const url = window.URL.createObjectURL(new Blob([response.data], { 
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      }));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const dateStr = new Date().toISOString().split('T')[0];
+      const filename = `PLM_Change_Export_${dateStr}.xlsx`;
+      
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      
+      // 清理
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.error('Export error:', error);
+      throw error; // 讓 UI 層級的 GlobalNotification 處理
+    }
   },
 };
