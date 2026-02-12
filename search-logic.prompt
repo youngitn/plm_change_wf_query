@@ -1,0 +1,44 @@
+# Role
+你是一個專精於 React 效能優化與企業級後台開發的架構師。
+
+# Context
+我們正在開發一個 PLM (產品生命週期管理) 的變更流程查詢頁面。
+請參考專案規範：@project-context.md
+請參考 API 定義：@swagger.json
+
+# Data Sources (API Endpoints)
+我們需要整合以下三個 API：
+1. **Filter Option A (Form Types):** `GET /api/agile/options/form-types`
+   - 用途：提供「表單類型」下拉選單的選項。
+2. **Filter Option B (Business Units):** `GET /api/agile/options/business-units`
+   - 用途：提供「事業部」下拉選單的選項。
+3. **Main Search (Query):** `GET /api/agile/changes`
+   - 用途：根據上述兩個選單的值，查詢變更單列表。
+
+# Requirements (Critical)
+
+## 1. Data Fetching Strategy (數據獲取策略)
+- 使用 `useEffect` 或 `TanStack Query` (依據 @project-context.md 的設定)。
+- **必須並行處理 (Parallel Execution):** 頁面初始化時，請使用 `Promise.all` 同時呼叫 `form-types` 和 `business-units` API，以減少等待時間。不要一個接一個等待 (Avoid Waterfall)。
+- 在選項載入期間，下拉選單應顯示 `Loading...` 或 Skeleton 狀態。
+
+## 2. Component Logic (組件邏輯)
+- 建立一個 `SearchFilter` 組件，包含兩個 `<Select>` (Ant Design) 和一個 `<Button type="primary">搜尋</Button>`。
+- 狀態管理：
+  - `formTypeOptions`: 儲存表單類型列表。
+  - `businessUnitOptions`: 儲存事業部列表。
+  - `searchParams`: 儲存使用者選中的值。
+- 當按下「搜尋」按鈕時，觸發 `fetchChanges(searchParams)`。
+
+## 3. TypeScript Interfaces
+請根據 @swagger.json 的定義，精確生成以下介面：
+- `IOption` (通用介面，包含 label 和 value)。
+- `IChangeRequest` (主查詢的回傳結構)。
+- `ISearchParams` (傳遞給主查詢的參數結構)。
+
+## 4. Error Handling
+- 如果 Option API 失敗，下拉選單應顯示「無法載入選項」，並允許重試。
+- 如果 Search API 失敗，顯示錯誤訊息提示。
+
+# Output
+請輸出完整的 `index.tsx` (包含 UI 與 邏輯) 以及 `types.ts`。
