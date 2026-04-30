@@ -55,6 +55,9 @@ export const ChangeTable: React.FC<ChangeTableProps> = ({ data, loading }) => {
 
   // 根據關卡名稱生成固定色塊顏色 (使用差異較大的色調)
   const getStageColor = (name: string) => {
+    if (name === '申請人站點' || name.toLowerCase() === 'submitted' || name.toLowerCase() === 'unassigned') {
+      return '#E8F5E9'; // 給予起點一個明顯的淺綠色
+    }
     const colors = [
       '#E3F2FD', // 藍
       '#F1F8E9', // 綠
@@ -92,18 +95,17 @@ export const ChangeTable: React.FC<ChangeTableProps> = ({ data, loading }) => {
 
   const paginatedData = sortedData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
-  const handleShowSignoffs = async (changeNo: string) => {
-    setCurrentChangeNo(changeNo);
+  const handleShowSignoffs = async (item: IChangeRequest) => {
+    setCurrentChangeNo(item.changeNumber);
     setIsModalOpen(true);
     setIsSignoffLoading(true);
     try {
-      const result = await changeService.getSignoffs(changeNo);
-      // 1. 過濾掉簽核人為空、'-' 或管理員帳號 (admin, administrator)
+      const result = await changeService.getSignoffs(item.changeNumber);
+      // 1. 保留申請人關卡，僅過濾掉管理員帳號 (admin, administrator)
       // 2. 當前關卡 (isCurrentStatus === 1) 永遠排在最後
       // 3. 其餘關卡根據結束時間由早到晚排序
       const filtered = result.filter(s => {
-        if (!s.signerName || s.signerName === '-') return false;
-        const name = s.signerName.toLowerCase();
+        const name = (s.signerName || '').toLowerCase();
         return !name.includes('admin') && !name.includes('administrator');
       });
       const sorted = [...filtered].sort((a, b) => {
@@ -115,6 +117,25 @@ export const ChangeTable: React.FC<ChangeTableProps> = ({ data, loading }) => {
         if (!b.endTime) return -1;
         return new Date(a.endTime).getTime() - new Date(b.endTime).getTime();
       });
+
+      // 檢查是否包含起始關卡 (通常是 Submitted 或 Unassigned)
+      const hasOriginatorStage = sorted.some(
+        s => s.statusName.toLowerCase() === 'submitted' || s.statusName.toLowerCase() === 'unassigned'
+      );
+
+      // 若無，則手動安插一筆發起人的歷史紀錄
+      if (!hasOriginatorStage && item.originator) {
+        sorted.unshift({
+          statusName: '申請人站點',
+          signerName: item.originator,
+          startTime: item.createDate,
+          endTime: item.createDate,
+          isCurrentStatus: 0,
+          signerType: 'Originator',
+          signStatus: 'Approved'
+        } as ISignoff);
+      }
+
       setSignoffs(sorted);
     } catch (e) {
       console.error('Failed to fetch signoffs');
@@ -158,7 +179,7 @@ export const ChangeTable: React.FC<ChangeTableProps> = ({ data, loading }) => {
               <TableRow><TableCell colSpan={6} align="center" sx={{ py: 8 }}><CircularProgress size={24} /></TableCell></TableRow>
             ) : paginatedData.map((item) => (
               <TableRow key={item.id} hover>
-                <TableCell><Link component="button" onClick={() => handleShowSignoffs(item.changeNumber)} sx={{ fontWeight: 700, textDecoration: 'none' }}>{item.changeNumber}</Link></TableCell>
+                <TableCell><Link component="button" onClick={() => handleShowSignoffs(item)} sx={{ fontWeight: 700, textDecoration: 'none' }}>{item.changeNumber}</Link></TableCell>
                 <TableCell><Typography variant="body2" sx={{ maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.description}</Typography></TableCell>
                 <TableCell>{item.workflow}</TableCell>
                 <TableCell align="center">
@@ -221,7 +242,7 @@ export const ChangeTable: React.FC<ChangeTableProps> = ({ data, loading }) => {
                         {isCurrent && <ArrowForwardIcon sx={{ fontSize: 14, mr: 1, verticalAlign: 'middle' }} />}
                         {s.statusName}
                       </TableCell>
-                      <TableCell sx={{ fontWeight: isCurrent ? 700 : 400 }}>{s.signerName}</TableCell>
+                      <TableCell sx={{ fontWeight: isCurrent ? 700 : 400 }}>{s.signerName || '-'}</TableCell>
                       <TableCell sx={{ color: isCurrent ? 'error.light' : 'text.secondary', fontSize: '0.875rem' }}>
                         {(s.endTime && !isCurrent) ? formatDisplayTime(s.endTime) : '-'}
                       </TableCell>
